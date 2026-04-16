@@ -34,6 +34,11 @@
   function seedData() {
     if (LS.get('beta_seeded')) return;
 
+    const usuarios = [
+      {id: uid(), usuario: 'prueba', pass: 'contraseñaprueba', rol: 'superAdmin'}
+    ]
+    LS.set('usuarios', usuarios)
+
     const proveedores = [
       { id: uid(), empresa: 'Distribuidora Central', contacto: 'María López', telefono: '+56 9 1234 5678', email: 'maria@distcentral.cl', ciudad: 'Santiago', categorias: 'Electrónica', notas: 'Entrega rápida', fecha: '2024-01-15' },
       { id: uid(), empresa: 'Suministros del Sur', contacto: 'Carlos Pérez', telefono: '+56 9 8765 4321', email: 'carlos@sumsur.cl', ciudad: 'Concepción', categorias: 'Ropa', notas: 'Precios competitivos', fecha: '2024-02-20' },
@@ -81,11 +86,13 @@
     LS.set('beta_seeded', true);
     LS.set('factura_counter', 4);
     LS.set('guia_counter', 3);
+
   }
 
   /* ----------------------------------------------------------
      ESTADO GLOBAL
      ---------------------------------------------------------- */
+  const currentUser = LS.get('currentUser') || {rol: 'admin', usuario: 'AD'};
   let currentModule = 'dashboard';
   let ventasTab = 'historial';
 
@@ -208,6 +215,46 @@
     });
   });
 
+  /* Init role permissions */
+  if (currentUser) {
+    if ($('#avatarInitials')) $('#avatarInitials').textContent = currentUser.usuario.substring(0, 2).toUpperCase();
+    if ($('#logoutBtn')) {
+      $('#logoutBtn').addEventListener('click', function() {
+        LS.set('currentUser', null);
+        window.location.href = 'auth.html';
+      });
+    }
+
+    if (currentUser.rol === 'superAdmin') {
+       navItems.forEach(n => {
+         const mod = n.dataset.module;
+         if (mod !== 'negocios' && mod !== 'usuarios') n.style.display = 'none';
+       });
+       if ($('#navNegocios')) $('#navNegocios').style.display = 'flex';
+       if ($('#navUsuarios')) $('#navUsuarios').style.display = 'flex';
+       currentModule = 'negocios';
+    } else if (currentUser.rol === 'admin') {
+       if ($('#navUsuarios')) $('#navUsuarios').style.display = 'flex';
+    } else if (currentUser.rol === 'bodeguero') {
+       navItems.forEach(n => {
+         const mod = n.dataset.module;
+         if (mod !== 'inventario' && mod !== 'despacho') n.style.display = 'none';
+       });
+       currentModule = 'inventario';
+    } else if (currentUser.rol === 'vendedor') {
+       navItems.forEach(n => {
+         const mod = n.dataset.module;
+         if (mod !== 'dashboard' && mod !== 'inventario' && mod !== 'ventas' && mod !== 'clientes') n.style.display = 'none';
+       });
+       currentModule = 'ventas';
+    }
+    
+    navItems.forEach(n => n.classList.remove('active'));
+    navItems.forEach(n => {
+      if (n.dataset.module === currentModule) n.classList.add('active');
+    });
+  }
+
   /* ----------------------------------------------------------
      RENDER MODULES
      ---------------------------------------------------------- */
@@ -230,6 +277,8 @@
       case 'proveedores': renderProveedores(); break;
       case 'clientes': renderClientes(); break;
       case 'despacho': renderDespacho(); break;
+      case 'negocios': renderNegocios(); break;
+      case 'usuarios': renderUsuarios(); break;
     }
   }
 
@@ -485,7 +534,9 @@
     html += '</select>';
     html += '<select id="invFilterDisp"><option value="">Disponibilidad</option><option value="disponible" ' + (invFilterDisp === 'disponible' ? 'selected' : '') + '>Disponible</option><option value="bajo" ' + (invFilterDisp === 'bajo' ? 'selected' : '') + '>Stock Bajo</option><option value="agotado" ' + (invFilterDisp === 'agotado' ? 'selected' : '') + '>Agotado</option></select>';
     html += '<button class="btn btn-secondary btn-sm" id="exportCsvBtn">📥 Exportar CSV</button>';
-    html += '<button class="btn btn-primary" id="addProductBtn">+ Agregar Producto</button>';
+    if (currentUser.rol !== 'vendedor') {
+      html += '<button class="btn btn-primary" id="addProductBtn">+ Agregar Producto</button>';
+    }
     html += '</div>';
 
     let filtered = productos.slice();
@@ -525,12 +576,16 @@
       html += '<td>' + fmtMoney(p.precioVenta) + '</td>';
       html += '<td>' + p.stock + '</td>';
       html += '<td><span class="badge ' + badgeCls + '">' + estado + '</span></td>';
-      html += '<td><div style="display:flex;gap:4px">';
-      html += '<button class="btn-icon" data-action="stock-down" data-id="' + p.id + '" title="Restar stock">−</button>';
-      html += '<button class="btn-icon" data-action="stock-up" data-id="' + p.id + '" title="Sumar stock">+</button>';
-      html += '<button class="btn-icon" data-action="edit-product" data-id="' + p.id + '" title="Editar">✏️</button>';
-      html += '<button class="btn-icon danger" data-action="delete-product" data-id="' + p.id + '" title="Eliminar">🗑️</button>';
-      html += '</div></td>';
+      if (currentUser.rol !== 'vendedor') {
+        html += '<td><div style="display:flex;gap:4px">';
+        html += '<button class="btn-icon" data-action="stock-down" data-id="' + p.id + '" title="Restar stock">−</button>';
+        html += '<button class="btn-icon" data-action="stock-up" data-id="' + p.id + '" title="Sumar stock">+</button>';
+        html += '<button class="btn-icon" data-action="edit-product" data-id="' + p.id + '" title="Editar">✏️</button>';
+        html += '<button class="btn-icon danger" data-action="delete-product" data-id="' + p.id + '" title="Eliminar">🗑️</button>';
+        html += '</div></td>';
+      } else {
+        html += '<td><span class="text-muted fs-11">Solo lectura</span></td>';
+      }
       html += '</tr>';
     });
     html += '</tbody></table></div>';
@@ -1141,7 +1196,9 @@
 
     let html = '<div class="toolbar">';
     html += '<div class="search-box"><input type="text" id="cliSearch" placeholder="Buscar cliente..." value="' + escAttr(cliSearch) + '"></div>';
-    html += '<button class="btn btn-primary" id="addCliBtn">+ Agregar Cliente</button>';
+    if (currentUser.rol !== 'vendedor') {
+      html += '<button class="btn btn-primary" id="addCliBtn">+ Agregar Cliente</button>';
+    }
     html += '</div>';
 
     let filtered = clientes.slice();
@@ -1173,7 +1230,11 @@
       html += '<td>' + cVentas.length + '</td>';
       html += '<td>' + fmtMoney(totalGastado) + '</td>';
       html += '<td>' + (ultimaCompra ? fmtDate(ultimaCompra.fecha) : '—') + '</td>';
-      html += '<td><div style="display:flex;gap:4px"><button class="btn-icon" data-action="edit-cliente" data-id="' + c.id + '">✏️</button><button class="btn-icon danger" data-action="delete-cliente" data-id="' + c.id + '">🗑️</button></div></td>';
+      if (currentUser.rol !== 'vendedor') {
+        html += '<td><div style="display:flex;gap:4px"><button class="btn-icon" data-action="edit-cliente" data-id="' + c.id + '">✏️</button><button class="btn-icon danger" data-action="delete-cliente" data-id="' + c.id + '">🗑️</button></div></td>';
+      } else {
+        html += '<td><span class="text-muted fs-11">Solo lectura</span></td>';
+      }
       html += '</tr>';
     });
 
@@ -1481,6 +1542,107 @@
     $$('[data-module="inventario"]').forEach(n => n.classList.add('active'));
     renderModule();
   });
+
+  /* ----------------------------------------------------------
+     NEGOCIOS (SUPER ADMIN)
+     ---------------------------------------------------------- */
+  function renderNegocios() {
+    $('#pageTitle').textContent = 'Gestión de Negocios';
+    const negocios = getData('negocios');
+    let html = '<div class="toolbar"><button class="btn btn-primary" id="addNegocioBtn">+ Agregar Negocio</button></div>';
+    html += '<div class="card"><div class="table-wrapper"><table><thead><tr><th>Nombre Negocio</th><th>ID</th></tr></thead><tbody>';
+    if(negocios.length === 0) {
+      html += '<tr><td colspan="2"><div class="empty-state"><p>No hay negocios registrados</p></div></td></tr>';
+    }
+    negocios.forEach(n => {
+      html += '<tr><td class="fw-600">' + esc(n.nombre) + '</td><td class="text-muted">' + n.id + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+    $('#contentArea').innerHTML = html;
+    
+    if ($('#addNegocioBtn')) {
+      $('#addNegocioBtn').addEventListener('click', function() {
+         openModal('Nuevo Negocio', '<div class="form-group"><label>Nombre del Negocio</label><input class="form-control" id="fNegocioNombre"></div>', '<button class="btn btn-secondary" id="modalCancelBtn">Cancelar</button><button class="btn btn-primary" id="modalSaveBtn">Crear</button>');
+         $('#modalCancelBtn').onclick = closeModal;
+         $('#modalSaveBtn').onclick = function() {
+            const nombre = $('#fNegocioNombre').value.trim();
+            if(!nombre) { toast('Nombre vacío', 'error'); return; }
+            const neg = getData('negocios');
+            neg.push({id: uid(), nombre});
+            saveData('negocios', neg);
+            toast('Negocio creado');
+            closeModal();
+            renderNegocios();
+         };
+      });
+    }
+  }
+
+  /* ----------------------------------------------------------
+     USUARIOS
+     ---------------------------------------------------------- */
+  function renderUsuarios() {
+    $('#pageTitle').textContent = 'Gestión de Usuarios';
+    const usuarios = getData('usuarios').filter(u => u.rol !== 'superAdmin');
+    let html = '<div class="toolbar"><button class="btn btn-primary" id="addUsuarioBtn">+ Agregar Usuario</button></div>';
+    html += '<div class="card"><div class="table-wrapper"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Negocio</th></tr></thead><tbody>';
+    if(usuarios.length === 0) {
+      html += '<tr><td colspan="3"><div class="empty-state"><p>No hay usuarios registrados</p></div></td></tr>';
+    }
+    const negocios = getData('negocios');
+    usuarios.forEach(u => {
+      const n = negocios.find(x => x.id === u.negocio);
+      html += '<tr><td class="fw-600">' + esc(u.usuario) + '</td><td><span class="badge badge-blue">' + u.rol + '</span></td><td>' + (n ? esc(n.nombre) : '—') + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+    $('#contentArea').innerHTML = html;
+    
+    if ($('#addUsuarioBtn')) {
+      $('#addUsuarioBtn').addEventListener('click', function() {
+         let body = '<div class="form-group"><label>Username</label><input class="form-control" id="fUser"></div>';
+         body += '<div class="form-group"><label>Contraseña</label><input type="password" class="form-control" id="fPass"></div>';
+         body += '<div class="form-group"><label>Rol</label><select class="form-control" id="fRol">';
+         
+         if (currentUser.rol === 'superAdmin') {
+           body += '<option value="admin">Administrador</option>';
+         } else {
+           body += '<option value="bodeguero">Bodeguero</option><option value="vendedor">Vendedor</option>';
+         }
+         body += '</select></div>';
+         
+         if (currentUser.rol === 'superAdmin') {
+            body += '<div class="form-group"><label>Negocio</label><select class="form-control" id="fNegocio"><option value="">-- Seleccionar --</option>';
+            getData('negocios').forEach(n => {
+              body += '<option value="' + n.id + '">' + esc(n.nombre) + '</option>';
+            });
+            body += '</select></div>';
+         }
+
+         openModal('Nuevo Usuario', body, '<button class="btn btn-secondary" id="modalCancelBtn">Cancelar</button><button class="btn btn-primary" id="modalSaveBtn">Crear</button>');
+         $('#modalCancelBtn').onclick = closeModal;
+         $('#modalSaveBtn').onclick = function() {
+            const usuario = $('#fUser').value.trim();
+            const pass = $('#fPass').value.trim();
+            const rol = $('#fRol').value;
+            const negocio = currentUser.rol === 'superAdmin' ? ( $('#fNegocio') ? $('#fNegocio').value : '' ) : currentUser.negocio;
+            
+            if(!usuario || !pass || (currentUser.rol === 'superAdmin' && !negocio)) {
+              toast('Completa los campos', 'error'); return;
+            }
+            
+            const users = getData('usuarios');
+            if (users.find(u => u.usuario === usuario)) {
+               toast('El usuario ya existe', 'error'); return;
+            }
+            users.push({id: uid(), usuario, pass, rol, negocio});
+            saveData('usuarios', users);
+            toast('Usuario creado');
+            closeModal();
+            renderUsuarios();
+         };
+      });
+    }
+  }
 
   /* Window resize to redraw chart */
   let resizeTimer;

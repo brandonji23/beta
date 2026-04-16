@@ -1238,3 +1238,67 @@ textarea.form-control {
 .justify-between { justify-content: space-between; }
 .hidden { display: none !important; }
 .w-full { width: 100%; }
+
+/* ============================================================
+   AUTH / LOGIN
+   ============================================================ */
+.auth-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--navy); /* Deep blue aesthetic */
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+}
+
+.auth-card {
+  background: var(--card-bg);
+  border-radius: calc(var(--radius) * 1.5);
+  padding: 40px 30px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+.auth-header {
+  margin-bottom: 30px;
+}
+
+.auth-header .logo-icon {
+  font-size: 40px;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.auth-header .logo-text {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.auth-form {
+  text-align: left;
+}
+
+.auth-error {
+  color: var(--red);
+  font-size: 12px;
+  background: var(--red-bg);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  margin-bottom: 15px;
+  font-weight: 500;
+}
