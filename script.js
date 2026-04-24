@@ -99,6 +99,23 @@
   function getData(key) { return LS.get(key) || []; }
   function saveData(key, data) { LS.set(key, data); }
 
+  /* Devuelve datos filtrados por negocio si el usuario no es superAdmin */
+  function getDataForUser(key) {
+    const all = getData(key);
+    if (!currentUser || currentUser.rol === 'superAdmin') return all;
+    const negocioId = currentUser.negocio;
+    if (!negocioId) return all;
+    return all.filter(item => !item.negocio || item.negocio === negocioId);
+  }
+
+  /* Guarda ítem asegurando que lleve el negocioId del usuario */
+  function stampNegocio(obj) {
+    if (currentUser && currentUser.rol !== 'superAdmin' && currentUser.negocio) {
+      obj.negocio = currentUser.negocio;
+    }
+    return obj;
+  }
+
   function getCliente(id) { return getData('clientes').find(c => c.id === id); }
   function getProveedor(id) { return getData('proveedores').find(p => p.id === id); }
   function getProducto(id) { return getData('productos').find(p => p.id === id); }
@@ -223,6 +240,28 @@
         LS.set('currentUser', null);
         window.location.href = 'auth.html';
       });
+    }
+
+    /* ---- Logo + nombre de negocio en sidebar ---- */
+    const sidebarLogoEl = $('#sidebarLogo');
+    if (sidebarLogoEl) {
+      if (currentUser.rol === 'superAdmin') {
+        sidebarLogoEl.innerHTML = '<span class="logo-icon">&#9670;</span><span class="logo-text">BETA</span>';
+      } else {
+        const negocios = getData('negocios');
+        const negocio = negocios.find(n => n.id === currentUser.negocio);
+        if (negocio) {
+          let logoHtml = '';
+          if (negocio.logo) {
+            logoHtml = '<img src="' + negocio.logo + '" alt="logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;">';
+          } else {
+            logoHtml = '<span class="logo-icon">&#9670;</span>';
+          }
+          sidebarLogoEl.innerHTML = logoHtml + '<span class="logo-text" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(negocio.nombre) + '</span>';
+        } else {
+          sidebarLogoEl.innerHTML = '<span class="logo-icon">&#9670;</span><span class="logo-text">BETA</span>';
+        }
+      }
     }
 
     if (currentUser.rol === 'superAdmin') {
@@ -520,7 +559,7 @@
   let invFilterDisp = '';
 
   function renderInventario() {
-    const productos = getData('productos');
+    const productos = getDataForUser('productos');
     const proveedores = getData('proveedores');
     const categorias = [...new Set(productos.map(p => p.categoria))];
 
@@ -670,7 +709,7 @@
       }
 
       const prods = getData('productos');
-      const obj = {
+      const obj = stampNegocio({
         id: isEdit ? editId : uid(),
         nombre,
         categoria,
@@ -681,7 +720,7 @@
         stock,
         sku: $('#fProdSku').value.trim(),
         imagen: $('#fProdImg').value.trim()
-      };
+      });
 
       if (isEdit) {
         const idx = prods.findIndex(p => p.id === editId);
@@ -742,7 +781,7 @@
   }
 
   function renderVentasHistorial() {
-    const ventas = getData('ventas');
+    const ventas = getDataForUser('ventas');
 
     let html = '<div class="toolbar">';
     html += '<div class="form-group" style="margin-bottom:0"><label style="margin-bottom:2px">Desde</label><input type="date" class="form-control" id="vFDesde" value="' + ventasFilterDesde + '"></div>';
@@ -1007,7 +1046,7 @@
       const metodoPago = $('#nvMetodo').value;
       const factura = nextFactura();
 
-      const venta = {
+      const venta = stampNegocio({
         id: uid(),
         factura,
         fecha: new Date().toISOString(),
@@ -1019,7 +1058,7 @@
         total,
         metodoPago,
         estado: 'Pagado'
-      };
+      });
 
       /* Update stock */
       const prods = getData('productos');
@@ -1049,8 +1088,8 @@
   let provPage = 1;
 
   function renderProveedores() {
-    const proveedores = getData('proveedores');
-    const productos = getData('productos');
+    const proveedores = getDataForUser('proveedores');
+    const productos = getDataForUser('productos');
 
     let html = '<div class="toolbar">';
     html += '<div class="search-box"><input type="text" id="provSearch" placeholder="Buscar proveedor..." value="' + escAttr(provSearch) + '"></div>';
@@ -1159,7 +1198,7 @@
       if (!empresa || !contacto) { toast('Completa los campos obligatorios', 'error'); return; }
 
       const provs = getData('proveedores');
-      const obj = {
+      const obj = stampNegocio({
         id: isEdit ? editId : uid(),
         empresa,
         contacto,
@@ -1169,7 +1208,7 @@
         categorias: $('#fProvCat').value.trim(),
         notas: $('#fProvNotas').value.trim(),
         fecha: isEdit ? (prov.fecha || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10)
-      };
+      });
 
       if (isEdit) {
         const idx = provs.findIndex(p => p.id === editId);
@@ -1191,8 +1230,8 @@
   let cliSearch = '';
 
   function renderClientes() {
-    const clientes = getData('clientes');
-    const ventas = getData('ventas');
+    const clientes = getDataForUser('clientes');
+    const ventas = getDataForUser('ventas');
 
     let html = '<div class="toolbar">';
     html += '<div class="search-box"><input type="text" id="cliSearch" placeholder="Buscar cliente..." value="' + escAttr(cliSearch) + '"></div>';
@@ -1284,14 +1323,14 @@
       if (!nombre || !rut) { toast('Completa los campos obligatorios', 'error'); return; }
 
       const clients = getData('clientes');
-      const obj = {
+      const obj = stampNegocio({
         id: isEdit ? editId : uid(),
         nombre,
         rut,
         email: $('#fCliEmail').value.trim(),
         telefono: $('#fCliTel').value.trim(),
         ciudad: $('#fCliCiudad').value.trim()
-      };
+      });
 
       if (isEdit) {
         const idx = clients.findIndex(c => c.id === editId);
@@ -1342,8 +1381,8 @@
   let guiaFilterEstado = '';
 
   function renderDespacho() {
-    const guias = getData('guias');
-    const ventas = getData('ventas');
+    const guias = getDataForUser('guias');
+    const ventas = getDataForUser('ventas');
 
     let html = '<div class="toolbar">';
     html += '<select id="guiaFilterEstado"><option value="">Todos los Estados</option><option value="En Bodega" ' + (guiaFilterEstado === 'En Bodega' ? 'selected' : '') + '>En Bodega</option><option value="En Despacho" ' + (guiaFilterEstado === 'En Despacho' ? 'selected' : '') + '>En Despacho</option><option value="Entregado" ' + (guiaFilterEstado === 'Entregado' ? 'selected' : '') + '>Entregado</option><option value="Cancelado" ' + (guiaFilterEstado === 'Cancelado' ? 'selected' : '') + '>Cancelado</option></select>';
@@ -1439,7 +1478,7 @@
   }
 
   function openGuiaModal() {
-    const ventas = getData('ventas').filter(v => v.estado !== 'Cancelado');
+    const ventas = getDataForUser('ventas').filter(v => v.estado !== 'Cancelado');
 
     let body = '<div class="form-group"><label>Venta Asociada *</label><select class="form-control" id="fGuiaVenta"><option value="">Seleccionar venta...</option>';
     ventas.forEach(v => {
@@ -1466,7 +1505,7 @@
       const venta = getData('ventas').find(v => v.id === ventaId);
       if (!venta) { toast('Venta no encontrada', 'error'); return; }
 
-      const guia = {
+      const guia = stampNegocio({
         id: uid(),
         numero: nextGuia(),
         ventaId,
@@ -1477,7 +1516,7 @@
         seguimiento: $('#fGuiaSeg').value.trim(),
         estado: 'En Bodega',
         actualizado: new Date().toISOString()
-      };
+      });
 
       const guias = getData('guias');
       guias.push(guia);
@@ -1550,32 +1589,112 @@
     $('#pageTitle').textContent = 'Gestión de Negocios';
     const negocios = getData('negocios');
     let html = '<div class="toolbar"><button class="btn btn-primary" id="addNegocioBtn">+ Agregar Negocio</button></div>';
-    html += '<div class="card"><div class="table-wrapper"><table><thead><tr><th>Nombre Negocio</th><th>ID</th></tr></thead><tbody>';
-    if(negocios.length === 0) {
-      html += '<tr><td colspan="2"><div class="empty-state"><p>No hay negocios registrados</p></div></td></tr>';
+    html += '<div class="card"><div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Logo</th><th>Nombre Empresa</th><th>ID</th><th>Usuarios</th><th>Acciones</th>';
+    html += '</tr></thead><tbody>';
+    if (negocios.length === 0) {
+      html += '<tr><td colspan="5"><div class="empty-state"><p>No hay negocios registrados</p></div></td></tr>';
     }
-    negocios.forEach(n => {
-      html += '<tr><td class="fw-600">' + esc(n.nombre) + '</td><td class="text-muted">' + n.id + '</td></tr>';
+    negocios.forEach(neg => {
+      const usuariosCount = getData('usuarios').filter(u => u.negocio === neg.id && u.rol !== 'superAdmin').length;
+      const logoHtml = neg.logo
+        ? '<img src="' + neg.logo + '" alt="logo" style="width:40px;height:40px;border-radius:8px;object-fit:cover;">'
+        : '<div style="width:40px;height:40px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px">&#9670;</div>';
+      html += '<tr>';
+      html += '<td>' + logoHtml + '</td>';
+      html += '<td class="fw-600">' + esc(neg.nombre) + '</td>';
+      html += '<td class="text-muted" style="font-size:11px">' + neg.id + '</td>';
+      html += '<td><span class="badge badge-blue">' + usuariosCount + ' usuario(s)</span></td>';
+      html += '<td><div style="display:flex;gap:4px">';
+      html += '<button class="btn-icon" data-action="edit-negocio" data-id="' + neg.id + '" title="Editar">✏️</button>';
+      html += '<button class="btn-icon danger" data-action="delete-negocio" data-id="' + neg.id + '" title="Eliminar">🗑️</button>';
+      html += '</div></td>';
+      html += '</tr>';
     });
     html += '</tbody></table></div></div>';
     $('#contentArea').innerHTML = html;
-    
+
     if ($('#addNegocioBtn')) {
-      $('#addNegocioBtn').addEventListener('click', function() {
-         openModal('Nuevo Negocio', '<div class="form-group"><label>Nombre del Negocio</label><input class="form-control" id="fNegocioNombre"></div>', '<button class="btn btn-secondary" id="modalCancelBtn">Cancelar</button><button class="btn btn-primary" id="modalSaveBtn">Crear</button>');
-         $('#modalCancelBtn').onclick = closeModal;
-         $('#modalSaveBtn').onclick = function() {
-            const nombre = $('#fNegocioNombre').value.trim();
-            if(!nombre) { toast('Nombre vacío', 'error'); return; }
-            const neg = getData('negocios');
-            neg.push({id: uid(), nombre});
-            saveData('negocios', neg);
-            toast('Negocio creado');
-            closeModal();
-            renderNegocios();
-         };
-      });
+      $('#addNegocioBtn').addEventListener('click', () => openNegocioModal());
     }
+
+    $$('[data-action="edit-negocio"]', $('#contentArea')).forEach(btn => {
+      btn.addEventListener('click', function () { openNegocioModal(this.dataset.id); });
+    });
+
+    $$('[data-action="delete-negocio"]', $('#contentArea')).forEach(btn => {
+      btn.addEventListener('click', function () { confirmDeleteNegocio(this.dataset.id); });
+    });
+  }
+
+  function openNegocioModal(editId) {
+    const isEdit = !!editId;
+    const negocios = getData('negocios');
+    const neg = isEdit ? negocios.find(n => n.id === editId) : {};
+    let logoBase64 = neg.logo || '';
+
+    let body = '<div class="form-group" style="text-align:center">';
+    body += '<div id="logoPreviewWrap" style="margin:0 auto 12px;width:90px;height:90px;border-radius:16px;overflow:hidden;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;background:var(--bg-secondary);cursor:pointer" onclick="document.getElementById(\'fNegocioLogo\').click()">';
+    if (neg.logo) {
+      body += '<img id="logoPreview" src="' + neg.logo + '" style="width:100%;height:100%;object-fit:cover">';
+    } else {
+      body += '<span id="logoPreview" style="font-size:36px">&#9670;</span>';
+    }
+    body += '</div>';
+    body += '<input type="file" id="fNegocioLogo" accept="image/*" style="display:none">';
+    body += '<small class="text-muted" style="display:block">Haz clic en el logo para seleccionar una imagen</small>';
+    body += '</div>';
+    body += '<div class="form-group"><label>Nombre de la Empresa *</label><input class="form-control" id="fNegocioNombre" placeholder="Ej: Mi Empresa S.A." value="' + escAttr(neg.nombre || '') + '"></div>';
+
+    const footer = '<button class="btn btn-secondary" id="modalCancelBtn">Cancelar</button><button class="btn btn-primary" id="modalSaveBtn">' + (isEdit ? 'Guardar Cambios' : 'Crear Negocio') + '</button>';
+    openModal(isEdit ? 'Editar Negocio' : 'Nuevo Negocio', body, footer);
+
+    /* Preview del logo al seleccionar imagen */
+    $('#fNegocioLogo').addEventListener('change', function () {
+      const file = this.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        logoBase64 = e.target.result;
+        $('#logoPreviewWrap').innerHTML = '<img id="logoPreview" src="' + logoBase64 + '" style="width:100%;height:100%;object-fit:cover">';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    $('#modalCancelBtn').onclick = closeModal;
+    $('#modalSaveBtn').onclick = function () {
+      const nombre = $('#fNegocioNombre').value.trim();
+      if (!nombre) { toast('El nombre de la empresa es obligatorio', 'error'); return; }
+      const negs = getData('negocios');
+      if (isEdit) {
+        const idx = negs.findIndex(n => n.id === editId);
+        if (idx !== -1) { negs[idx].nombre = nombre; negs[idx].logo = logoBase64; }
+      } else {
+        negs.push({ id: uid(), nombre, logo: logoBase64 });
+      }
+      saveData('negocios', negs);
+      toast(isEdit ? 'Negocio actualizado' : 'Negocio creado exitosamente');
+      closeModal();
+      renderNegocios();
+    };
+  }
+
+  function confirmDeleteNegocio(negId) {
+    const neg = getData('negocios').find(n => n.id === negId);
+    const nombre = neg ? neg.nombre : 'este negocio';
+    openModal('Eliminar Negocio',
+      '<p>¿Estás seguro de que deseas eliminar <strong>' + esc(nombre) + '</strong>?</p><p class="text-muted" style="margin-top:8px">Los usuarios asociados perderán su negocio asignado.</p>',
+      '<button class="btn btn-secondary" id="modalCancelBtn">Cancelar</button><button class="btn btn-danger" id="modalConfirmBtn">Eliminar</button>');
+    $('#modalCancelBtn').onclick = closeModal;
+    $('#modalConfirmBtn').onclick = function () {
+      const negs = getData('negocios');
+      const idx = negs.findIndex(n => n.id === negId);
+      if (idx !== -1) negs.splice(idx, 1);
+      saveData('negocios', negs);
+      toast('Negocio eliminado');
+      closeModal();
+      renderNegocios();
+    };
   }
 
   /* ----------------------------------------------------------
@@ -1583,7 +1702,11 @@
      ---------------------------------------------------------- */
   function renderUsuarios() {
     $('#pageTitle').textContent = 'Gestión de Usuarios';
-    const usuarios = getData('usuarios').filter(u => u.rol !== 'superAdmin');
+    /* SuperAdmin ve todos; admin solo ve los de su negocio */
+    let usuarios = getData('usuarios').filter(u => u.rol !== 'superAdmin');
+    if (currentUser.rol === 'admin' && currentUser.negocio) {
+      usuarios = usuarios.filter(u => u.negocio === currentUser.negocio);
+    }
     let html = '<div class="toolbar"><button class="btn btn-primary" id="addUsuarioBtn">+ Agregar Usuario</button></div>';
     html += '<div class="card"><div class="table-wrapper"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Negocio</th></tr></thead><tbody>';
     if(usuarios.length === 0) {
